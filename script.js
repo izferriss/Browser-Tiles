@@ -1,51 +1,66 @@
-const Player = function(x,y){
-    this.x = x;
-    this.y = y;
-};
+const TILE_SIZE_INITIAL = 32;                       //pixels
+const TILE_WIDTH = 32;                              //pixels
+const TILE_HEIGHT = 32;                             //pixels
+const SCALE = 2;                                    //multiplier
+const TILE_SIZE_SCALED = TILE_SIZE_INITIAL * SCALE; //pixels
+var mapWidth = 50;                                  //number of tiles
+var mapHeight = 25;                                 //number of tiles
+var ctx = null;                                     //context
 
-Player.prototype = {
+//Tileset
+var tileSet = new Image();
+tileSet.src="dungeonTiles.png";
 
-    moveTo:function(x,y)
-    {
-        this.x += (x - this.x - spriteWidth) * 0.05;
-        this.y += (y - this.y - spriteHeight) * 0.05;
-    }
-};
+//Frame rate vars
+var currentSecond = 0;
+var frameCount = 0;
+var framesLastSecond = 0;
+var lastFrameTime = 0;
 
-const ViewPort = function(x, y, w, h)
+var keysDown =
 {
-    this.x = x;
-    this.y = y;
-    this.h = h;
-    this.w = w;
+    37: false,
+    38: false,
+    39: false,
+    40: false
 };
 
-ViewPort.prototype = {
+var player = new Character();
 
-    scrollTo:function(x,y)
-    {
-        this.x = x - this.w/2;
-        this.y = y - this.h/2;
-    }
-};
+//1: passable
+//0: impassable
+var collisionMap =
+[
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,1,1,
+    1,1,1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1,1,1,
+    1,1,1,0,1,1,1,1,1,1,1,1,0,0,0,1,1,0,0,1,1,0,0,1,1,1,1,0,0,1,1,0,0,1,1,0,0,0,1,1,1,1,1,1,1,1,0,1,1,1,
+    1,1,1,0,1,1,0,0,0,0,1,1,1,1,1,0,0,1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1,0,0,1,1,1,1,1,0,0,0,0,1,1,0,1,1,1,
+    1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1,
+    1,1,0,0,1,1,0,0,1,1,0,0,0,1,1,0,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,0,0,1,1,1,0,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,1,1,
+    1,0,1,1,1,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,0,1,1,0,0,0,0,1,1,1,1,
+    1,1,0,0,0,0,0,0,1,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,1,0,1,1,0,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,1,0,0,0,0,0,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,0,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,1,1,1,0,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1
+];
 
-var player = new Player(384, 256);
-var viewport = new ViewPort(320, 320, 640, 640);
-
-var pointer = {x: 0, y:0};
-var context = document.querySelector("canvas").getContext("2d");
-var height = document.documentElement.clientHeight;
-var width = document.documentElement.clientWidth;
-var tileSize = 32;
-var spriteWidth = tileSize;
-var spriteHeight = 48;
-var scaled_size = 2;
-var columns = 50;
-var rows = 25;
-var numTiles = rows * columns;
-
-var map =
-   [65,65,65,65,65,65,65,65,65,10,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,13,65,65,65,65,65,65,65,65,65,
+var gameMap =
+[
+    65,65,65,65,65,65,65,65,65,10,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,13,65,65,65,65,65,65,65,65,65,
     65,65,65,65,65,65,65,65,65,20,22,21,22,56,57,21,22,56,57,21,22,22,21,22,56,57,21,22,56,57,21,22,22,56,57,22,56,57,57,56,23,65,65,65,65,65,65,65,65,65,
     65,65,65,10,11,11,11,11,12,14,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,31,32,32,32,32,32,32,32,15,11,12,11,11,12,13,65,65,65,
     65,65,65,20,21,22,22,21,57,24,32,32,35,42,41,42,41,42,41,42,41,42,34,32,32,32,32,35,41,42,41,42,41,42,41,42,41,34,32,32,25,56,57,56,57,56,23,65,65,65,
@@ -69,152 +84,269 @@ var map =
     64,65,65,65,65,65,65,65,65,65,65,65,20,32,32,25,56,57,56,22,21,56,57,24,32,32,25,56,22,56,57,22,56,57,24,28,32,23,66,30,18,18,18,18,18,18,18,33,65,65,
     65,64,65,65,65,65,65,65,64,64,64,64,30,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,33,66,20,18,18,18,18,19,18,18,23,65,65,
     65,64,64,65,65,65,65,64,64,64,64,64,40,41,42,42,42,41,42,41,42,41,42,34,32,32,35,41,42,41,42,41,42,41,42,41,42,43,66,30,18,18,18,18,18,18,18,33,65,65,
-    65,64,64,64,65,64,64,64,64,64,64,65,65,65,65,65,65,65,65,65,65,65,65,40,41,42,43,66,66,66,66,66,66,66,66,66,66,66,66,40,41,42,41,42,41,42,42,43,65,65]
+    65,64,64,64,65,64,64,64,64,64,64,65,65,65,65,65,65,65,65,65,65,65,65,40,41,42,43,66,66,66,66,66,66,66,66,66,66,66,66,40,41,42,41,42,41,42,42,43,65,65
+];
 
-    function loop()
+//Character
+function Character()
+{
+    this.tileFrom = [4,4];
+    this.tileTo = [4,4];
+    this.timeMoved = 0;
+    this.dimensions = [TILE_WIDTH, TILE_HEIGHT];
+    this.position = [128,128];                        //pixels
+    this.delayMove = 300;                           //ms
+}
+
+//Places character at x,y location
+Character.prototype.placeAt = function(x,y)
+{
+    this.tileFrom = [x,y];
+    this.tileTo = [x,y];
+    this.position = [((TILE_WIDTH * x) + ((TILE_WIDTH-this.dimensions[0])/2)), ((TILE_HEIGHT * y) + ((TILE_HEIGHT - this.dimensions[1])/2))];
+};
+
+//Character movement
+Character.prototype.processMovement = function(t)
+{
+    if(this.tileFrom[0] == this.tileTo[0] && this.tileFrom[1] == this.tileTo[1])
     {
-        window.requestAnimationFrame(loop);
-        height = document.documentElement.clientHeight;
-        width = document.documentElement.clientWidth;
+        return false;
+    }
 
-        context.canvas.height = height;
-        context.canvas.width = width;
+    if((t-this.timeMoved) >= this.delayMove)
+    {
+        this.placeAt(this.tileTo[0], this.tileTo[1]);
+    }
+    else
+    {
+        this.position[0] = (this.tileFrom[0] * TILE_WIDTH) + ((TILE_WIDTH - this.dimensions[0])/2);
+        this.position[1] = (this.tileFrom[1] * TILE_HEIGHT) + ((TILE_HEIGHT - this.dimensions[1])/2);
 
-        context.imageSmoothingEnabled = false;
-
-        player.moveTo(pointer.x, pointer.y);
-        viewport.scrollTo(player.x, player.y);
-
-        var x_min = Math.floor(viewport.x/(tileSize * scaled_size));
-        var y_min = Math.floor(viewport.y/(tileSize * scaled_size));
-        var x_max = Math.ceil((viewport.x + viewport.w) / (tileSize * scaled_size));
-        var y_max = Math.ceil((viewport.y + viewport.h) / (tileSize * scaled_size));
-
-        //don't draw past boundaries
-        if (x_min < 0)
+        //horizontal movement
+        if(this.tileTo[0] != this.tileFrom[0])
         {
-            x_min = 0;
-        }
-        if (y_min < 0)
-        {
-            y_min = 0;
-        }
-        if (x_max > columns)
-        {
-            x_max = columns;
-        }
-        if(y_max > rows)
-        {
-            y_max = rows;
+            var diff = (TILE_WIDTH / this.delayMove) * (t - this.timeMoved);
+            this.position[0] += (this.tileTo[0] < this.tileFrom[0] ? 0 - diff : diff);
         }
 
-        let counter = 0;
-
-        for(let y = y_min; y < y_max; y++)
+        //vertical movement
+        if(this.tileTo[1] != this.tileFrom[1])
         {
-            for(let x = x_min; x < x_max; x++)
-            {
-                let value = map[x + columns * y];
-                let tileSheetPos_y = 0;
-                let tileSheetPos_x = 0;
+            var diff = (TILE_HEIGHT / this.delayMove) * (t - this.timeMoved)
+            this.position[1] += (this.tileTo[1] < this.tileFrom[1] ? 0 - diff : diff);
+        }
 
-                /*
+        this.position[0] = Math.round(this.position[0]);
+        this.position[1] = Math.round(this.position[1]);
+    }
+
+    return true;
+};
+
+function toIndex(x,y)
+{
+    return ((y * mapWidth + x));
+}
+
+window.onload = function()
+{
+    //define context
+    ctx = document.getElementById('game').getContext('2d');
+
+    //define global font
+    ctx.font = "10pt consolas";
+
+    //Keydown listener
+    window.addEventListener("keydown", function(e)
+    {
+        if(e.keyCode>=37 && e.keyCode <= 40)
+        {
+            keysDown[e.keyCode] = true;
+        }
+    });
+
+    //Keyup listener
+    window.addEventListener("keyup", function(e)
+    {
+        if(e.keyCode>=37 && e.keyCode <= 40)
+        {
+            keysDown[e.keyCode] = false;
+        }
+    });
+
+}
+
+function drawGame()
+{
+    //loop!
+    requestAnimationFrame(drawGame);
+
+    //If context doesn't exist, don't do anything
+    if(ctx == null)
+    {
+        return;
+    }
+
+    //frame rate calculations
+    var currentFrameTime = Date.now();                      //ms
+    var timeElapsed = currentFrameTime - lastFrameTime;
+    var sec = Math.floor(Date.now()/1000);
+
+    if (sec != currentSecond)
+    {
+        currentSecond = sec;
+        framesLastSecond = frameCount;
+        frameCount = 1;
+    }
+    else
+    {
+        frameCount++;
+    }
+
+    //player movement
+    if(!player.processMovement(currentFrameTime))
+    {
+        //check if movement is allowed
+        //(38 = UP)
+        if(keysDown[38] && player.tileFrom[1] > 0 && collisionMap[toIndex(player.tileFrom[0], player.tileFrom[1] - 1)] == 1)
+        {
+            player.tileTo[1] -= 1;
+        }
+        //(40 = DOWN)
+        else if(keysDown[40] && player.tileFrom[1] < (mapHeight -1) && collisionMap[toIndex(player.tileFrom[0], player.tileFrom[1] + 1)] == 1)
+        {
+            player.tileTo[1] += 1;
+        }
+        //(37 = LEFT)
+        if(keysDown[37] && player.tileFrom[0] > 0 && collisionMap[toIndex(player.tileFrom[0] - 1, player.tileFrom[1])] == 1)
+        {
+            player.tileTo[0] -= 1;
+        }
+        //(39 = RIGHT)
+        else if(keysDown[39] && player.tileFrom[0] < (mapWidth -1) && collisionMap[toIndex(player.tileFrom[0] + 1, player.tileFrom[1])] == 1)
+        {
+            player.tileTo[0] += 1;
+        }
+
+        //if tileFrom and tileTo don't match, the player is moving
+        if(player.tileFrom[0] != player.tileTo[0] || player.tileFrom[1] != player.tileTo[1])
+        {
+            player.timeMoved = currentFrameTime;
+        }
+    }
+
+
+
+    //draw map
+    for(var y = 0; y < mapHeight; y++)
+    {
+        for(var x = 0; x < mapWidth; x++)
+        {
+            //gets the value of the element at pos x,y
+            let value = gameMap[x + mapWidth * y];
+
+            //placeholders for the top-left corner positions of the tile within the tileset
+            let tileSetPosX = 0;
+            let tileSetPosY = 0;
+
+            /*
                 this if statement is to get the pixel position within the sprite sheet based on the value in map[]
                 -- tile set has 10 columns of tiles max, but any number of rows
                 -- map[n] returns value which is represented as a concatenated row and column
                 ----- eg. if value is 65, the tile is in the 6th row and 5th column of the tileset
                 ----- with this understood, we can find the top left corner of each tile
+
                 * adjust if statement to reflect the number of rows in your tileset by continuing the sequence of if/else
-                */
+            */
 
-                //first row
-                if(value > 0 && value < 10)
-                {
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
+            //first row
+            if(value > 0 && value < 10)
+            {
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 0;
+            }
+            //second row
+            else if(value > 9 && value < 20)
+            {
+                //reduce to a number 0-9
+                value -= 10;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 32;
+            }
+            //third row
+            else if(value > 19 && value < 30)
+            {
+                //reduce to a number 0-9
+                value -= 20;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 64;
+            }
+            //fourth row
+            else if(value > 29 && value < 40)
+            {
+                //reduce to a number 0-9
+                value -= 30;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 96;
+            }
+            //fifth row
+            else if(value > 39 && value < 50)
+            {
+                //reduce to a number 0-9
+                value -= 40;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 128;
+            }
+            //sixth row
+            else if(value > 49 && value < 60)
+            {
+                //reduce to a number 0-9
+                value -= 50;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 160;
+            }
+            //seventh row
+            else
+            {
+                //reduce to a number 0-9
+                value -= 60;
+ 
+                //top-left pixel xpos
+                tileSetPosX = TILE_SIZE_INITIAL * value;
+ 
+                //top-left pixel ypos
+                tileSetPosY = 192;
+            }
 
-                    //top-left pixel ypos
-                    tileSheetPos_y = 0;
-                }
-                //second row
-                else if(value > 9 && value < 20)
-                {
-                    //reduce to a number 0-9
-                    value -= 10;
+            let drawX = x * TILE_SIZE_INITIAL;
+            let drawY = y * TILE_SIZE_INITIAL;
 
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 32;
-                }
-                //third row
-                else if(value > 19 && value < 30)
-                {
-                    //reduce to a number 0-9
-                    value -= 20;
-
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 64;
-                }
-                //fourth row
-                else if(value > 29 && value < 40)
-                {
-                    //reduce to a number 0-9
-                    value -= 30;
-
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 96;
-                }
-                //fifth row
-                else if(value > 39 && value < 50)
-                {
-                    //reduce to a number 0-9
-                    value -= 40;
-
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 128;
-                }
-                //sixth row
-                else if(value > 49 && value < 60)
-                {
-                    //reduce to a number 0-9
-                    value -= 50;
-
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 160;
-                }
-                //seventh row
-                else
-                {
-                    //reduce to a number 0-9
-                    value -= 60;
-
-                    //top-left pixel xpos
-                    tileSheetPos_x = tileSize * value;
-
-                    //top-left pixel ypos
-                    tileSheetPos_y = 192;
-                }
-
-                //define the size of the tile to be drawn
-                let tile_x = (x * tileSize * scaled_size) - viewport.x + width/2 - viewport.w/2;
-                let tile_y = (y * tileSize * scaled_size) - viewport.y + height/2 - viewport.h/2;
-
-                //draw the tile
-                /*
+            //draw the tile
+            /*
                 drawImage()
                 -- source,
                 -- top-left x pos in source,
@@ -225,39 +357,28 @@ var map =
                 -- top-left y pos of drawing area,
                 -- x-axis amount to draw to
                 -- y-axis amount to draw to
-                */
-                context.drawImage(tileSheet, tileSheetPos_x, tileSheetPos_y, tileSize, tileSize, tile_x, tile_y, tileSize * scaled_size, tileSize * scaled_size);
+            */
+            ctx.drawImage(tileSet, tileSetPosX, tileSetPosY, TILE_WIDTH, TILE_HEIGHT, drawX, drawY, TILE_SIZE_INITIAL, TILE_SIZE_INITIAL);
 
-                counter++;
-            }
+
+            //define player color
+            ctx.fillStyle ="#0000ff";
+
+            //draw player (rect)
+            ctx.fillRect(player.position[0], player.position[1], player.dimensions[0], player.dimensions[1]);
+
+            //define font color
+            ctx.fillStyle = "#ff0000";
+
+            //draw frame rate
+            ctx.fillText("FPS: " + framesLastSecond, 10, 20);
+ 
+            //update FPS
+            lastFrameTime = currentFrameTime;
         }
-
-        player.moveTo(pointer.x, pointer.y);
-        context.drawImage(playerSheet_down, 0, 0, spriteWidth, spriteHeight, Math.round(player.x - viewport.x + (width/2) - (viewport.w/2)), Math.round(player.y - viewport.y + (height/2) - (viewport.h/2)), spriteWidth * scaled_size, spriteHeight * scaled_size);
-
-        //viewport clip frame
-        context.strokeStyle = "#ffff00";
-        context.rect(width/2 - viewport.w/2 ,height/2 - viewport.h/2, viewport.w, viewport.h);
-        context.stroke();
-
     }
-    var tileSheet = new Image();
-    tileSheet.src="dungeonTiles.png";
-    var playerSheet_up = new Image();
-    playerSheet_up.src = "suikStyle_up.png";
-    var playerSheet_down = new Image();
-    playerSheet_down.src = "suikStyle_down.png";
-    var playerSheet_left = new Image();
-    playerSheet_left.src = "suikStyle_leftright.png";
-    var playerSheet_right = new Image();
-    playerSheet_right.src = "suikStyle_leftright.png";
+}
 
 
-    tileSheet.addEventListener("load", (event)=>{loop();});
-
-    context.canvas.addEventListener("click", (event)=>
-    {
-        pointer.x = event.pageX + viewport.x - width/2 + viewport.w/2;
-        pointer.y = event.pageY + viewport.y - height/2 + viewport.h/2;
-    });
-
+//Wait for tileset to load before launching game loop
+tileSet.addEventListener("load", (event)=>{drawGame();});
